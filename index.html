@@ -7,6 +7,38 @@
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    @keyframes softIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.98);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @keyframes floatUp {
+      from {
+        opacity: 0;
+        transform: translate(-50%, 12px) scale(0.98);
+      }
+      to {
+        opacity: 1;
+        transform: translate(-50%, 0) scale(1);
+      }
+    }
+
+    .soft-in {
+      animation: softIn 500ms ease-out both;
+    }
+
+    .float-up {
+      animation: floatUp 350ms ease-out both;
+    }
+  </style>
 </head>
 
 <body class="bg-[#FAFAF7] text-stone-900">
@@ -14,6 +46,32 @@
 
   <script>
     const { useState, useEffect, useRef } = React;
+
+    const savedMessages = [
+      "saved for later",
+      "parked.",
+      "you can stop carrying that",
+      "got it. not now."
+    ];
+
+    const surfacePrompts = [
+      "this came back",
+      "still on your mind?",
+      "you parked this earlier",
+      "worth your attention?",
+      "this surfaced again"
+    ];
+
+    const doneMessages = [
+      "nice. one less thing.",
+      "clear.",
+      "done. moving on.",
+      "that’s out of your head now"
+    ];
+
+    function randomFrom(list) {
+      return list[Math.floor(Math.random() * list.length)];
+    }
 
     function App() {
       const fileInputRef = useRef(null);
@@ -25,6 +83,8 @@
 
       const [input, setInput] = useState("");
       const [message, setMessage] = useState("all clear");
+      const [current, setCurrent] = useState(null);
+      const [surfaceLabel, setSurfaceLabel] = useState("you parked this earlier");
 
       useEffect(() => {
         localStorage.setItem("reply-later-items", JSON.stringify(items));
@@ -34,19 +94,76 @@
         const text = input.trim();
         if (!text) return;
 
-        const newItem = {
-          id: Date.now(),
-          text,
-          shown: 0
-        };
+        setItems(prev => [
+          ...prev,
+          {
+            id: Date.now(),
+            text,
+            shown: 0,
+            createdAt: new Date().toISOString()
+          }
+        ]);
 
-        setItems(prev => [...prev, newItem]);
         setInput("");
-        setMessage("saved for later");
+        setMessage(randomFrom(savedMessages));
+      }
+
+      function surfaceNext() {
+        const available = items.filter(item => item.shown < 2);
+
+        if (available.length === 0) {
+          setCurrent(null);
+          setMessage("all clear");
+          return;
+        }
+
+        const next = available[Math.floor(Math.random() * available.length)];
+        const updatedNext = { ...next, shown: next.shown + 1 };
+
+        setSurfaceLabel(randomFrom(surfacePrompts));
+
+        setTimeout(() => {
+          setCurrent(updatedNext);
+          setMessage(updatedNext.shown === 2 ? "this might not come back again" : "one thought surfaced");
+
+          setItems(prev =>
+            prev.map(item =>
+              item.id === next.id ? updatedNext : item
+            )
+          );
+        }, 300);
+      }
+
+      useEffect(() => {
+        const delay = Math.random() * 25000 + 15000;
+        const timer = setTimeout(surfaceNext, delay);
+        return () => clearTimeout(timer);
+      }, [items]);
+
+      function handleDone() {
+        if (!current) return;
+
+        setMessage(randomFrom(doneMessages));
+
+        setTimeout(() => {
+          setItems(prev => prev.filter(item => item.id !== current.id));
+          setCurrent(null);
+        }, 180);
+      }
+
+      function handleLater() {
+        setCurrent(null);
+        setMessage("parked again");
       }
 
       function exportThoughts() {
-        const blob = new Blob([JSON.stringify(items, null, 2)], {
+        const data = {
+          app: "Reply Later",
+          exportedAt: new Date().toISOString(),
+          items
+        };
+
+        const blob = new Blob([JSON.stringify(data, null, 2)], {
           type: "application/json"
         });
 
@@ -70,42 +187,59 @@
         reader.onload = function(ev) {
           try {
             const data = JSON.parse(ev.target.result);
-            if (!Array.isArray(data)) return;
+            const importedItems = Array.isArray(data) ? data : data.items;
 
-            setItems(prev => [...data, ...prev]);
-            setMessage("imported");
+            if (!Array.isArray(importedItems)) {
+              setMessage("couldn’t read that backup");
+              return;
+            }
+
+            const cleaned = importedItems
+              .filter(item => item && item.text)
+              .map(item => ({
+                id: item.id || Date.now() + Math.random(),
+                text: item.text,
+                shown: item.shown || 0,
+                createdAt: item.createdAt || new Date().toISOString()
+              }));
+
+            setItems(prev => [...cleaned, ...prev]);
+            setMessage(`${cleaned.length} restored`);
           } catch {
-            setMessage("error importing");
+            setMessage("couldn’t import that file");
           }
         };
 
         reader.readAsText(file);
+        e.target.value = "";
       }
+
+      const activeCount = items.filter(item => item.shown < 2).length;
+
+      let loadLabel = "light";
+      if (activeCount >= 4 && activeCount <= 7) loadLabel = "busy";
+      if (activeCount >= 8) loadLabel = "crowded";
 
       return React.createElement(
         "main",
-        { className: "min-h-screen flex flex-col items-center justify-center px-6 py-12" },
+        {
+          className:
+            "min-h-screen relative flex flex-col items-center justify-center px-5 py-24 sm:px-6 sm:py-12 overflow-hidden"
+        },
 
-        // Top right utilities
         React.createElement(
           "div",
-          { className: "fixed top-6 right-6 flex gap-4 text-sm text-stone-400" },
+          { className: "fixed top-4 right-4 z-20 flex gap-3 rounded-full bg-white/70 px-4 py-2 text-xs sm:text-sm text-stone-400 shadow-sm backdrop-blur-md" },
 
           React.createElement(
             "button",
-            {
-              onClick: exportThoughts,
-              className: "hover:text-stone-900 transition"
-            },
+            { onClick: exportThoughts, className: "hover:text-stone-900 transition" },
             "export"
           ),
 
           React.createElement(
             "button",
-            {
-              onClick: () => fileInputRef.current.click(),
-              className: "hover:text-stone-900 transition"
-            },
+            { onClick: () => fileInputRef.current.click(), className: "hover:text-stone-900 transition" },
             "import"
           ),
 
@@ -120,12 +254,24 @@
 
         React.createElement(
           "section",
-          { className: "w-full max-w-xl text-center" },
+          { className: "soft-in w-full max-w-xl text-center" },
+
+          React.createElement(
+            "p",
+            { className: "mb-4 text-xs uppercase tracking-[0.28em] text-stone-400 sm:text-sm" },
+            "Reply Later"
+          ),
 
           React.createElement(
             "h1",
-            { className: "text-4xl md:text-5xl font-semibold mb-6" },
+            { className: "mx-auto mb-5 max-w-lg text-4xl font-semibold leading-tight tracking-[-0.04em] sm:text-5xl" },
             "Drop the thought. Stop carrying it."
+          ),
+
+          React.createElement(
+            "p",
+            { className: "mx-auto mb-10 max-w-md text-sm leading-7 text-stone-500 sm:text-base" },
+            "Not a to-do list. A quiet place to put thoughts down and let the right ones come back."
           ),
 
           React.createElement("input", {
@@ -133,24 +279,87 @@
             onChange: e => setInput(e.target.value),
             onKeyDown: e => e.key === "Enter" && addItem(),
             placeholder: "what's on your mind?",
-            className: "w-full rounded-full border border-stone-200 px-6 py-5 text-center text-lg outline-none shadow-sm"
+            className:
+              "w-full rounded-full border border-stone-200 bg-white/85 px-6 py-5 text-center text-base outline-none shadow-[0_20px_70px_rgba(28,25,23,0.07)] placeholder:text-stone-300 transition focus:-translate-y-[1px] focus:border-stone-300 focus:ring-4 focus:ring-stone-200/50 sm:text-lg"
           }),
 
           React.createElement(
+            "div",
+            { className: "mt-6 flex flex-wrap items-center justify-center gap-2 text-xs text-stone-400 sm:text-sm" },
+            React.createElement("span", null, `${activeCount} thing${activeCount === 1 ? "" : "s"} parked`),
+            React.createElement("span", null, "•"),
+            React.createElement("span", null, `mental load: ${loadLabel}`)
+          ),
+
+          React.createElement(
             "p",
-            { className: "mt-4 text-sm text-stone-400" },
+            { className: "mt-4 min-h-[20px] text-sm text-stone-400" },
             message
-          )
+          ),
+
+          activeCount > 0 &&
+            React.createElement(
+              "button",
+              {
+                onClick: surfaceNext,
+                className: "mt-8 text-sm text-stone-400 transition hover:text-stone-900"
+              },
+              "gently resurface one now"
+            )
         ),
 
-        // Bottom right support
+        current &&
+          React.createElement(
+            "div",
+            {
+              className:
+                "float-up fixed bottom-20 left-1/2 z-30 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-[2rem] border border-stone-200 bg-white/95 p-6 text-center shadow-[0_30px_90px_rgba(28,25,23,0.18)] backdrop-blur-xl sm:bottom-8"
+            },
+
+            React.createElement(
+              "p",
+              { className: "mb-3 text-sm text-stone-400" },
+              surfaceLabel
+            ),
+
+            React.createElement(
+              "h2",
+              { className: "mb-6 text-2xl font-medium tracking-tight" },
+              current.text
+            ),
+
+            React.createElement(
+              "div",
+              { className: "flex gap-3" },
+
+              React.createElement(
+                "button",
+                {
+                  onClick: handleDone,
+                  className: "flex-1 rounded-full bg-stone-900 px-5 py-3 text-white transition hover:bg-stone-700"
+                },
+                "done"
+              ),
+
+              React.createElement(
+                "button",
+                {
+                  onClick: handleLater,
+                  className: "flex-1 rounded-full border border-stone-200 px-5 py-3 text-stone-600 transition hover:bg-stone-50"
+                },
+                "later"
+              )
+            )
+          ),
+
         React.createElement(
           "a",
           {
             href: "https://buymeacoffee.com/xcvbn",
             target: "_blank",
+            rel: "noopener noreferrer",
             className:
-              "fixed bottom-6 right-6 text-sm px-4 py-2 rounded-full bg-stone-900 text-white hover:bg-stone-700 transition shadow-md"
+              "fixed bottom-4 right-4 z-20 rounded-full bg-stone-900 px-4 py-2 text-xs text-white shadow-md transition hover:-translate-y-[1px] hover:bg-stone-700 sm:bottom-6 sm:right-6 sm:text-sm"
           },
           "support the next feature"
         )
