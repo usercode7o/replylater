@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Reply Later</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- React -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+  <!-- Styling -->
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-[#FAFAF7] flex items-center justify-center h-screen text-stone-900">
+
+<div id="root"></div>
+
+<script>
+const { useState, useEffect } = React;
+
+function App() {
+  const [items, setItems] = useState([]);
+  const [input, setInput] = useState("");
+  const [current, setCurrent] = useState(null);
+
+  function addItem() {
+    if (!input.trim()) return;
+
+    setItems(prev => [...prev, { text: input, shown: 0 }]);
+    setInput("");
+  }
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const next = items.find(i => i.shown < 2);
+
+      if (next) {
+        setCurrent(next);
+        next.shown++;
+      }
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, [items]);
+
+  return (
+    React.createElement("div", { className: "flex flex-col items-center gap-6 w-full max-w-md px-4" },
+
+      React.createElement("h1", { className: "text-2xl font-medium mb-4" }, "Reply Later"),
+
+      React.createElement("input", {
+        value: input,
+        onChange: e => setInput(e.target.value),
+        onKeyDown: e => e.key === "Enter" && addItem(),
+        placeholder: "what's on your mind?",
+        className: "w-full text-center p-4 rounded-full border outline-none"
+      }),
+
+      current && React.createElement("div", {
+        className: "mt-6 bg-white p-6 rounded-xl shadow w-full text-center"
+      },
+        React.createElement("p", { className: "text-sm text-gray-400" }, "you parked this earlier"),
+        React.createElement("h3", { className: "text-lg mt-2" }, current.text),
+
+        React.createElement("div", { className: "flex gap-2 mt-4 justify-center" },
+
+          React.createElement("button", {
+            onClick: () => setCurrent(null),
+            className: "px-4 py-2 bg-black text-white rounded-full"
+          }, "now"),
+
+          React.createElement("button", {
+            onClick: () => setCurrent(null),
+            className: "px-4 py-2 border rounded-full"
+          }, "later")
+        )
+      )
+    )
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script>
+
+</body>
+</html>
