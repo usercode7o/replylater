@@ -4,84 +4,221 @@
   <title>Reply Later</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- React -->
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-
-  <!-- Styling -->
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
-<body class="bg-[#FAFAF7] flex items-center justify-center h-screen text-stone-900">
+<body class="bg-[#FAFAF7] text-stone-900">
+  <div id="root"></div>
 
-<div id="root"></div>
+  <script>
+    const { useState, useEffect } = React;
 
-<script>
-const { useState, useEffect } = React;
+    function App() {
+      const [items, setItems] = useState(() => {
+        const saved = localStorage.getItem("reply-later-items");
+        return saved ? JSON.parse(saved) : [];
+      });
 
-function App() {
-  const [items, setItems] = useState([]);
-  const [input, setInput] = useState("");
-  const [current, setCurrent] = useState(null);
+      const [input, setInput] = useState("");
+      const [current, setCurrent] = useState(null);
+      const [message, setMessage] = useState("all clear");
 
-  function addItem() {
-    if (!input.trim()) return;
+      useEffect(() => {
+        localStorage.setItem("reply-later-items", JSON.stringify(items));
+      }, [items]);
 
-    setItems(prev => [...prev, { text: input, shown: 0 }]);
-    setInput("");
-  }
+      function addItem() {
+        const text = input.trim();
+        if (!text) return;
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const next = items.find(i => i.shown < 2);
+        const newItem = {
+          id: Date.now(),
+          text,
+          shown: 0,
+          createdAt: new Date().toISOString()
+        };
 
-      if (next) {
-        setCurrent(next);
-        next.shown++;
+        setItems(prev => [...prev, newItem]);
+        setInput("");
+        setMessage("saved for later");
       }
-    }, 15000);
 
-    return () => clearInterval(interval);
-  }, [items]);
+      function surfaceNext() {
+        const available = items.filter(item => item.shown < 2);
 
-  return (
-    React.createElement("div", { className: "flex flex-col items-center gap-6 w-full max-w-md px-4" },
+        if (available.length === 0) {
+          setCurrent(null);
+          setMessage("all clear");
+          return;
+        }
 
-      React.createElement("h1", { className: "text-2xl font-medium mb-4" }, "Reply Later"),
+        const next = available[Math.floor(Math.random() * available.length)];
 
-      React.createElement("input", {
-        value: input,
-        onChange: e => setInput(e.target.value),
-        onKeyDown: e => e.key === "Enter" && addItem(),
-        placeholder: "what's on your mind?",
-        className: "w-full text-center p-4 rounded-full border outline-none"
-      }),
+        setCurrent(next);
+        setItems(prev =>
+          prev.map(item =>
+            item.id === next.id
+              ? { ...item, shown: item.shown + 1 }
+              : item
+          )
+        );
+      }
 
-      current && React.createElement("div", {
-        className: "mt-6 bg-white p-6 rounded-xl shadow w-full text-center"
-      },
-        React.createElement("p", { className: "text-sm text-gray-400" }, "you parked this earlier"),
-        React.createElement("h3", { className: "text-lg mt-2" }, current.text),
+      useEffect(() => {
+        const delay = Math.random() * 20000 + 10000;
 
-        React.createElement("div", { className: "flex gap-2 mt-4 justify-center" },
+        const timer = setTimeout(() => {
+          surfaceNext();
+        }, delay);
 
-          React.createElement("button", {
-            onClick: () => setCurrent(null),
-            className: "px-4 py-2 bg-black text-white rounded-full"
-          }, "now"),
+        return () => clearTimeout(timer);
+      }, [items]);
 
-          React.createElement("button", {
-            onClick: () => setCurrent(null),
-            className: "px-4 py-2 border rounded-full"
-          }, "later")
-        )
-      )
-    )
-  );
-}
+      function handleNow() {
+        if (!current) return;
 
-ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
-</script>
+        setItems(prev => prev.filter(item => item.id !== current.id));
+        setCurrent(null);
+        setMessage("one less thing to carry");
+      }
 
+      function handleLater() {
+        setCurrent(null);
+        setMessage("parked again");
+      }
+
+      function clearExpired() {
+        setItems(prev => prev.filter(item => item.shown < 2));
+        setCurrent(null);
+        setMessage("cleared what did not come back strong");
+      }
+
+      const activeCount = items.filter(item => item.shown < 2).length;
+
+      let loadLabel = "light";
+      if (activeCount >= 4 && activeCount <= 7) loadLabel = "busy";
+      if (activeCount >= 8) loadLabel = "crowded";
+
+      return React.createElement(
+        "main",
+        { className: "min-h-screen flex flex-col items-center justify-center px-6 py-12" },
+
+        React.createElement(
+          "section",
+          { className: "w-full max-w-xl text-center" },
+
+          React.createElement(
+            "p",
+            { className: "text-sm uppercase tracking-[0.25em] text-stone-400 mb-4" },
+            "Reply Later"
+          ),
+
+          React.createElement(
+            "h1",
+            { className: "text-4xl md:text-5xl font-semibold tracking-tight mb-4" },
+            "Drop the thought. Stop carrying it."
+          ),
+
+          React.createElement(
+            "p",
+            { className: "text-stone-500 mb-10 leading-7" },
+            "Not a to-do list. A quiet place to put thoughts down and let the right ones come back."
+          ),
+
+          React.createElement("input", {
+            value: input,
+            onChange: e => setInput(e.target.value),
+            onKeyDown: e => e.key === "Enter" && addItem(),
+            placeholder: "what's on your mind?",
+            className: "w-full rounded-full border border-stone-200 bg-white/80 px-6 py-5 text-center text-lg outline-none shadow-sm placeholder:text-stone-300 focus:ring-2 focus:ring-stone-200"
+          }),
+
+          React.createElement(
+            "div",
+            { className: "mt-6 flex items-center justify-center gap-3 text-sm text-stone-400" },
+            React.createElement("span", null, `${activeCount} thing${activeCount === 1 ? "" : "s"} parked`),
+            React.createElement("span", null, "•"),
+            React.createElement("span", null, `mental load: ${loadLabel}`)
+          ),
+
+          React.createElement(
+            "p",
+            { className: "mt-4 text-sm text-stone-400" },
+            message
+          ),
+
+          activeCount > 0 &&
+            React.createElement(
+              "button",
+              {
+                onClick: surfaceNext,
+                className: "mt-8 text-sm text-stone-400 hover:text-stone-900 transition"
+              },
+              "gently resurface one now"
+            ),
+
+          items.some(item => item.shown >= 2) &&
+            React.createElement(
+              "button",
+              {
+                onClick: clearExpired,
+                className: "mt-4 block mx-auto text-sm text-stone-300 hover:text-stone-700 transition"
+              },
+              "clear faded thoughts"
+            )
+        ),
+
+        current &&
+          React.createElement(
+            "div",
+            {
+              className:
+                "fixed bottom-6 left-1/2 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-3xl border border-stone-200 bg-white/95 p-6 text-center shadow-2xl transition-all"
+            },
+
+            React.createElement(
+              "p",
+              { className: "text-sm text-stone-400 mb-3" },
+              "you parked this earlier"
+            ),
+
+            React.createElement(
+              "h2",
+              { className: "text-2xl font-medium tracking-tight mb-6" },
+              current.text
+            ),
+
+            React.createElement(
+              "div",
+              { className: "flex gap-3" },
+
+              React.createElement(
+                "button",
+                {
+                  onClick: handleNow,
+                  className: "flex-1 rounded-full bg-stone-900 px-5 py-3 text-white hover:bg-stone-700 transition"
+                },
+                "done"
+              ),
+
+              React.createElement(
+                "button",
+                {
+                  onClick: handleLater,
+                  className: "flex-1 rounded-full border border-stone-200 px-5 py-3 text-stone-600 hover:bg-stone-50 transition"
+                },
+                "later"
+              )
+            )
+          )
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(
+      React.createElement(App)
+    );
+  </script>
 </body>
 </html>
