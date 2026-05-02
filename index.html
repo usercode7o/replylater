@@ -15,32 +15,6 @@
   <script>
     const { useState, useEffect, useRef } = React;
 
-    const surfacePrompts = [
-      "this came back",
-      "still on your mind?",
-      "you parked this earlier",
-      "worth your attention?",
-      "this surfaced again"
-    ];
-
-    const doneMessages = [
-      "nice. one less thing.",
-      "clear.",
-      "done. moving on.",
-      "that’s out of your head now"
-    ];
-
-    const savedMessages = [
-      "saved for later",
-      "parked.",
-      "you can stop carrying that",
-      "got it. not now."
-    ];
-
-    function randomFrom(list) {
-      return list[Math.floor(Math.random() * list.length)];
-    }
-
     function App() {
       const fileInputRef = useRef(null);
 
@@ -50,9 +24,7 @@
       });
 
       const [input, setInput] = useState("");
-      const [current, setCurrent] = useState(null);
       const [message, setMessage] = useState("all clear");
-      const [surfaceLabel, setSurfaceLabel] = useState("you parked this earlier");
 
       useEffect(() => {
         localStorage.setItem("reply-later-items", JSON.stringify(items));
@@ -65,93 +37,16 @@
         const newItem = {
           id: Date.now(),
           text,
-          shown: 0,
-          createdAt: new Date().toISOString()
+          shown: 0
         };
 
         setItems(prev => [...prev, newItem]);
         setInput("");
-        setMessage(randomFrom(savedMessages));
-      }
-
-      function surfaceNext() {
-        const available = items.filter(item => item.shown < 2);
-
-        if (available.length === 0) {
-          setCurrent(null);
-          setMessage("all clear");
-          return;
-        }
-
-        const next = available[Math.floor(Math.random() * available.length)];
-        const updatedNext = { ...next, shown: next.shown + 1 };
-
-        setSurfaceLabel(randomFrom(surfacePrompts));
-
-        setTimeout(() => {
-          setCurrent(updatedNext);
-
-          if (updatedNext.shown === 2) {
-            setMessage("this might not come back again");
-          } else {
-            setMessage("one thought surfaced");
-          }
-
-          setItems(prev =>
-            prev.map(item =>
-              item.id === next.id ? updatedNext : item
-            )
-          );
-        }, 400);
-      }
-
-      useEffect(() => {
-        const delay = Math.random() * 20000 + 10000;
-
-        const timer = setTimeout(() => {
-          surfaceNext();
-        }, delay);
-
-        return () => clearTimeout(timer);
-      }, [items]);
-
-      function handleDone() {
-        if (!current) return;
-
-        setMessage(randomFrom(doneMessages));
-
-        setTimeout(() => {
-          setItems(prev => prev.filter(item => item.id !== current.id));
-          setCurrent(null);
-        }, 200);
-      }
-
-      function handleLater() {
-        setCurrent(null);
-
-        const hour = new Date().getHours();
-
-        if (hour >= 20 || hour < 6) {
-          setMessage("let it wait until tomorrow");
-        } else {
-          setMessage("parked again");
-        }
-      }
-
-      function clearExpired() {
-        setItems(prev => prev.filter(item => item.shown < 2));
-        setCurrent(null);
-        setMessage("cleared what didn’t come back strong");
+        setMessage("saved for later");
       }
 
       function exportThoughts() {
-        const data = {
-          app: "Reply Later",
-          exportedAt: new Date().toISOString(),
-          items
-        };
-
-        const blob = new Blob([JSON.stringify(data, null, 2)], {
+        const blob = new Blob([JSON.stringify(items, null, 2)], {
           type: "application/json"
         });
 
@@ -166,78 +61,52 @@
         setMessage("backup downloaded");
       }
 
-      function importThoughts(event) {
-        const file = event.target.files[0];
+      function importThoughts(e) {
+        const file = e.target.files[0];
         if (!file) return;
 
         const reader = new FileReader();
 
-        reader.onload = function(e) {
+        reader.onload = function(ev) {
           try {
-            const data = JSON.parse(e.target.result);
-            const importedItems = Array.isArray(data) ? data : data.items;
+            const data = JSON.parse(ev.target.result);
+            if (!Array.isArray(data)) return;
 
-            if (!Array.isArray(importedItems)) {
-              setMessage("couldn’t read that backup");
-              return;
-            }
-
-            const cleaned = importedItems
-              .filter(item => item && item.text)
-              .map(item => ({
-                id: item.id || Date.now() + Math.random(),
-                text: item.text,
-                shown: item.shown || 0,
-                createdAt: item.createdAt || new Date().toISOString()
-              }));
-
-            setItems(prev => [...cleaned, ...prev]);
-            setMessage(`${cleaned.length} thought${cleaned.length === 1 ? "" : "s"} restored`);
+            setItems(prev => [...data, ...prev]);
+            setMessage("imported");
           } catch {
-            setMessage("couldn’t import that file");
+            setMessage("error importing");
           }
         };
 
         reader.readAsText(file);
-        event.target.value = "";
       }
-
-      const activeCount = items.filter(item => item.shown < 2).length;
-      const expiredCount = items.filter(item => item.shown >= 2).length;
-
-      let loadLabel = "light";
-      if (activeCount >= 4 && activeCount <= 7) loadLabel = "busy";
-      if (activeCount >= 8) loadLabel = "crowded";
 
       return React.createElement(
         "main",
         { className: "min-h-screen flex flex-col items-center justify-center px-6 py-12" },
 
+        // Top right utilities
         React.createElement(
-          "section",
-          { className: "w-full max-w-xl text-center" },
+          "div",
+          { className: "fixed top-6 right-6 flex gap-4 text-sm text-stone-400" },
 
-          React.createElement("p", { className: "text-sm uppercase tracking-[0.25em] text-stone-400 mb-4" }, "Reply Later"),
+          React.createElement(
+            "button",
+            {
+              onClick: exportThoughts,
+              className: "hover:text-stone-900 transition"
+            },
+            "export"
+          ),
 
-          React.createElement("h1", { className: "text-4xl md:text-5xl font-semibold mb-4" }, "Drop the thought. Stop carrying it."),
-
-          React.createElement("input", {
-            value: input,
-            onChange: e => setInput(e.target.value),
-            onKeyDown: e => e.key === "Enter" && addItem(),
-            placeholder: "what's on your mind?",
-            className: "w-full rounded-full border px-6 py-5 text-center"
-          }),
-
-          React.createElement("p", { className: "mt-4 text-sm text-stone-400" }, message),
-
-          React.createElement("div", { className: "mt-6 flex gap-4 justify-center" },
-
-            React.createElement("button", { onClick: exportThoughts }, "export"),
-
-            React.createElement("button", {
-              onClick: () => fileInputRef.current.click()
-            }, "import")
+          React.createElement(
+            "button",
+            {
+              onClick: () => fileInputRef.current.click(),
+              className: "hover:text-stone-900 transition"
+            },
+            "import"
           ),
 
           React.createElement("input", {
@@ -246,18 +115,51 @@
             accept: "application/json",
             onChange: importThoughts,
             className: "hidden"
+          })
+        ),
+
+        React.createElement(
+          "section",
+          { className: "w-full max-w-xl text-center" },
+
+          React.createElement(
+            "h1",
+            { className: "text-4xl md:text-5xl font-semibold mb-6" },
+            "Drop the thought. Stop carrying it."
+          ),
+
+          React.createElement("input", {
+            value: input,
+            onChange: e => setInput(e.target.value),
+            onKeyDown: e => e.key === "Enter" && addItem(),
+            placeholder: "what's on your mind?",
+            className: "w-full rounded-full border border-stone-200 px-6 py-5 text-center text-lg outline-none shadow-sm"
           }),
 
-          React.createElement("a", {
+          React.createElement(
+            "p",
+            { className: "mt-4 text-sm text-stone-400" },
+            message
+          )
+        ),
+
+        // Bottom right support
+        React.createElement(
+          "a",
+          {
             href: "https://buymeacoffee.com/xcvbn",
             target: "_blank",
-            className: "mt-10 inline-block bg-black text-white px-6 py-3 rounded-full"
-          }, "support the next feature")
+            className:
+              "fixed bottom-6 right-6 text-sm px-4 py-2 rounded-full bg-stone-900 text-white hover:bg-stone-700 transition shadow-md"
+          },
+          "support the next feature"
         )
       );
     }
 
-    ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+    ReactDOM.createRoot(document.getElementById("root")).render(
+      React.createElement(App)
+    );
   </script>
 </body>
 </html>
