@@ -10,34 +10,17 @@
 
   <style>
     @keyframes softIn {
-      from {
-        opacity: 0;
-        transform: translateY(10px) scale(0.98);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-      }
+      from { opacity: 0; transform: translateY(10px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
     }
 
     @keyframes floatUp {
-      from {
-        opacity: 0;
-        transform: translate(-50%, 12px) scale(0.98);
-      }
-      to {
-        opacity: 1;
-        transform: translate(-50%, 0) scale(1);
-      }
+      from { opacity: 0; transform: translate(-50%, 12px) scale(0.98); }
+      to { opacity: 1; transform: translate(-50%, 0) scale(1); }
     }
 
-    .soft-in {
-      animation: softIn 500ms ease-out both;
-    }
-
-    .float-up {
-      animation: floatUp 350ms ease-out both;
-    }
+    .soft-in { animation: softIn 500ms ease-out both; }
+    .float-up { animation: floatUp 350ms ease-out both; }
   </style>
 </head>
 
@@ -75,6 +58,7 @@
 
     function App() {
       const fileInputRef = useRef(null);
+      const recognitionRef = useRef(null);
 
       const [items, setItems] = useState(() => {
         const saved = localStorage.getItem("reply-later-items");
@@ -85,6 +69,7 @@
       const [message, setMessage] = useState("all clear");
       const [current, setCurrent] = useState(null);
       const [surfaceLabel, setSurfaceLabel] = useState("you parked this earlier");
+      const [listening, setListening] = useState(false);
 
       useEffect(() => {
         localStorage.setItem("reply-later-items", JSON.stringify(items));
@@ -106,6 +91,54 @@
 
         setInput("");
         setMessage(randomFrom(savedMessages));
+
+        if (document.activeElement) {
+          document.activeElement.blur();
+        }
+      }
+
+      function startVoiceInput() {
+        const SpeechRecognition =
+          window.SpeechRecognition || window.webkitSpeechRecognition;
+
+        if (!SpeechRecognition) {
+          setMessage("voice input is not supported in this browser");
+          return;
+        }
+
+        if (listening && recognitionRef.current) {
+          recognitionRef.current.stop();
+          setListening(false);
+          return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = "en-US";
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        recognition.onstart = function() {
+          setListening(true);
+          setMessage("listening...");
+        };
+
+        recognition.onresult = function(event) {
+          const transcript = event.results[0][0].transcript;
+          setInput(transcript);
+          setMessage("captured. tap arrow to save.");
+        };
+
+        recognition.onerror = function() {
+          setMessage("couldn’t hear that");
+          setListening(false);
+        };
+
+        recognition.onend = function() {
+          setListening(false);
+        };
+
+        recognitionRef.current = recognition;
+        recognition.start();
       }
 
       function surfaceNext() {
@@ -274,14 +307,42 @@
             "Not a to-do list. A quiet place to put thoughts down and let the right ones come back."
           ),
 
-          React.createElement("input", {
-            value: input,
-            onChange: e => setInput(e.target.value),
-            onKeyDown: e => e.key === "Enter" && addItem(),
-            placeholder: "what's on your mind?",
-            className:
-              "w-full rounded-full border border-stone-200 bg-white/85 px-6 py-5 text-center text-base outline-none shadow-[0_20px_70px_rgba(28,25,23,0.07)] placeholder:text-stone-300 transition focus:-translate-y-[1px] focus:border-stone-300 focus:ring-4 focus:ring-stone-200/50 sm:text-lg"
-          }),
+          React.createElement(
+            "div",
+            { className: "relative w-full" },
+
+            React.createElement("input", {
+              value: input,
+              onChange: e => setInput(e.target.value),
+              onKeyDown: e => e.key === "Enter" && addItem(),
+              placeholder: "what's on your mind?",
+              className:
+                "w-full rounded-full border border-stone-200 bg-white/85 px-14 py-5 text-center text-base outline-none shadow-[0_20px_70px_rgba(28,25,23,0.07)] placeholder:text-stone-300 transition focus:-translate-y-[1px] focus:border-stone-300 focus:ring-4 focus:ring-stone-200/50 sm:text-lg"
+            }),
+
+            React.createElement(
+              "button",
+              {
+                onClick: startVoiceInput,
+                title: "voice input",
+                className:
+                  "absolute left-2 top-1/2 -translate-y-1/2 rounded-full px-4 py-2 text-sm transition " +
+                  (listening ? "bg-stone-900 text-white" : "text-stone-400 hover:bg-stone-100 hover:text-stone-800")
+              },
+              listening ? "●" : "🎙"
+            ),
+
+            React.createElement(
+              "button",
+              {
+                onClick: addItem,
+                title: "save thought",
+                className:
+                  "absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-stone-900 px-4 py-2 text-sm text-white transition hover:bg-stone-700"
+              },
+              "→"
+            )
+          ),
 
           React.createElement(
             "div",
