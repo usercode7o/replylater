@@ -15,6 +15,32 @@
   <script>
     const { useState, useEffect } = React;
 
+    const surfacePrompts = [
+      "this came back",
+      "still on your mind?",
+      "you parked this earlier",
+      "worth your attention?",
+      "this surfaced again"
+    ];
+
+    const doneMessages = [
+      "nice. one less thing.",
+      "clear.",
+      "done. moving on.",
+      "that’s out of your head now"
+    ];
+
+    const savedMessages = [
+      "saved for later",
+      "parked.",
+      "you can stop carrying that",
+      "got it. not now."
+    ];
+
+    function randomFrom(list) {
+      return list[Math.floor(Math.random() * list.length)];
+    }
+
     function App() {
       const [items, setItems] = useState(() => {
         const saved = localStorage.getItem("reply-later-items");
@@ -24,6 +50,7 @@
       const [input, setInput] = useState("");
       const [current, setCurrent] = useState(null);
       const [message, setMessage] = useState("all clear");
+      const [surfaceLabel, setSurfaceLabel] = useState("you parked this earlier");
 
       useEffect(() => {
         localStorage.setItem("reply-later-items", JSON.stringify(items));
@@ -42,7 +69,7 @@
 
         setItems(prev => [...prev, newItem]);
         setInput("");
-        setMessage("saved for later");
+        setMessage(randomFrom(savedMessages));
       }
 
       function surfaceNext() {
@@ -55,15 +82,25 @@
         }
 
         const next = available[Math.floor(Math.random() * available.length)];
+        const updatedNext = { ...next, shown: next.shown + 1 };
 
-        setCurrent(next);
-        setItems(prev =>
-          prev.map(item =>
-            item.id === next.id
-              ? { ...item, shown: item.shown + 1 }
-              : item
-          )
-        );
+        setSurfaceLabel(randomFrom(surfacePrompts));
+
+        setTimeout(() => {
+          setCurrent(updatedNext);
+
+          if (updatedNext.shown === 2) {
+            setMessage("this might not come back again");
+          } else {
+            setMessage("one thought surfaced");
+          }
+
+          setItems(prev =>
+            prev.map(item =>
+              item.id === next.id ? updatedNext : item
+            )
+          );
+        }, 400);
       }
 
       useEffect(() => {
@@ -76,26 +113,37 @@
         return () => clearTimeout(timer);
       }, [items]);
 
-      function handleNow() {
+      function handleDone() {
         if (!current) return;
 
-        setItems(prev => prev.filter(item => item.id !== current.id));
-        setCurrent(null);
-        setMessage("one less thing to carry");
+        setMessage(randomFrom(doneMessages));
+
+        setTimeout(() => {
+          setItems(prev => prev.filter(item => item.id !== current.id));
+          setCurrent(null);
+        }, 200);
       }
 
       function handleLater() {
         setCurrent(null);
-        setMessage("parked again");
+
+        const hour = new Date().getHours();
+
+        if (hour >= 20 || hour < 6) {
+          setMessage("let it wait until tomorrow");
+        } else {
+          setMessage("parked again");
+        }
       }
 
       function clearExpired() {
         setItems(prev => prev.filter(item => item.shown < 2));
         setCurrent(null);
-        setMessage("cleared what did not come back strong");
+        setMessage("cleared what didn’t come back strong");
       }
 
       const activeCount = items.filter(item => item.shown < 2).length;
+      const expiredCount = items.filter(item => item.shown >= 2).length;
 
       let loadLabel = "light";
       if (activeCount >= 4 && activeCount <= 7) loadLabel = "busy";
@@ -145,7 +193,7 @@
 
           React.createElement(
             "p",
-            { className: "mt-4 text-sm text-stone-400" },
+            { className: "mt-4 text-sm text-stone-400 min-h-[20px]" },
             message
           ),
 
@@ -159,7 +207,7 @@
               "gently resurface one now"
             ),
 
-          items.some(item => item.shown >= 2) &&
+          expiredCount > 0 &&
             React.createElement(
               "button",
               {
@@ -181,14 +229,27 @@
             React.createElement(
               "p",
               { className: "text-sm text-stone-400 mb-3" },
-              "you parked this earlier"
+              surfaceLabel
             ),
 
             React.createElement(
               "h2",
-              { className: "text-2xl font-medium tracking-tight mb-6" },
+              { className: "text-2xl font-medium tracking-tight mb-3" },
               current.text
             ),
+
+            current.shown >= 2 &&
+              React.createElement(
+                "p",
+                { className: "text-sm text-stone-400 mb-6" },
+                "this might not come back again"
+              ),
+
+            current.shown < 2 &&
+              React.createElement(
+                "div",
+                { className: "mb-6" }
+              ),
 
             React.createElement(
               "div",
@@ -197,7 +258,7 @@
               React.createElement(
                 "button",
                 {
-                  onClick: handleNow,
+                  onClick: handleDone,
                   className: "flex-1 rounded-full bg-stone-900 px-5 py-3 text-white hover:bg-stone-700 transition"
                 },
                 "done"
